@@ -3,12 +3,15 @@ import pandas as pd
 from datetime import date
 import plotly.graph_objects as go
 
+from config import get_config
+
 INDO_MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"]
 
 def render_notification_h10(df: pd.DataFrame, c_theme: dict):
-    """Mendeteksi program yang berada di rentang H-10 sebelum selesai dan belum selesai (CHECK=False)."""
+    """Mendeteksi program yang berada di rentang H-x sebelum selesai dan belum selesai (CHECK=False)."""
     today = date.today()
-    
+    h_days = get_config("h10_warning_days")
+
     # Filter program yang memiliki tanggal selesai dan belum selesai
     mask_h10 = (
         df["_TGL_SELESAI_EFEKTIF"].notna()
@@ -21,9 +24,9 @@ def render_notification_h10(df: pd.DataFrame, c_theme: dict):
 
     # Hitung sisa hari menuju tanggal selesai
     df_active["sisa_hari"] = df_active["_TGL_SELESAI_EFEKTIF"].apply(lambda d: (d - today).days)
-    
-    # Ambil program yang berada di rentang 0 s.d. 10 hari sebelum selesai
-    warning_programs = df_active[(df_active["sisa_hari"] >= 0) & (df_active["sisa_hari"] <= 10)]
+
+    # Ambil program yang berada di rentang 0 s.d. H-x hari sebelum selesai
+    warning_programs = df_active[(df_active["sisa_hari"] >= 0) & (df_active["sisa_hari"] <= h_days)]
     
     if not warning_programs.empty:
         with st.container(border=True):
@@ -32,9 +35,9 @@ def render_notification_h10(df: pd.DataFrame, c_theme: dict):
                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
                     <span style="font-size: 22px;">⚠️</span>
                     <div>
-                        <strong style="color: {c_theme['warning']}; font-size: 15px;">Peringatan Pengisian Survei Pelatihan (H-10 Menuju Selesai)</strong>
+                        <strong style="color: {c_theme['warning']}; font-size: 15px;">Peringatan Pengisian Survei Pelatihan (H-{h_days} Menuju Selesai)</strong>
                         <div style="font-size: 12.5px; color: {c_theme['text_secondary']};">
-                            Ada <strong>{len(warning_programs)} program pelatihan</strong> yang mendekati masa akhir pelatihan (≤ 10 hari lagi). Harap arahkan siswa untuk segera mengisi kuesioner / survei evaluasi.
+                            Ada <strong>{len(warning_programs)} program pelatihan</strong> yang mendekati masa akhir pelatihan (≤ {h_days} hari lagi). Harap arahkan siswa untuk segera mengisi kuesioner / survei evaluasi.
                         </div>
                     </div>
                 </div>
@@ -88,7 +91,9 @@ def render_kuota_card(title, total_paket, total_target_kuota, total_siswa_terisi
         with m3:
             st.metric("Total Selesai (Check)", f"{total_selesai:,}".replace(",", ".") + " Paket")
 
-        if sub_programs is not None and not sub_programs.empty:
+        if sub_programs is not None and sub_programs.empty:
+            st.caption("Belum ada program pelatihan tercatat untuk kategori ini.")
+        elif sub_programs is not None and not sub_programs.empty:
             with st.expander(f"Lihat Rincian Program di {title} ({len(sub_programs)} Program)"):
                 for _, prog in sub_programs.iterrows():
                     p_target = prog["paket_sub"] * 16
@@ -108,10 +113,13 @@ def render_kuota_card(title, total_paket, total_target_kuota, total_siswa_terisi
 
 def render_dashboard(df: pd.DataFrame, c_theme: dict):
     if df.empty:
-        st.info("Tidak ada data yang cocok dengan filter yang dipilih.")
+        st.info(
+            "Tidak ada data yang cocok dengan filter yang dipilih. "
+            "Coba ubah atau reset filter di sidebar untuk melihat data lain."
+        )
         return
 
-    KAPASITAS_DEFAULT = 16
+    KAPASITAS_DEFAULT = get_config("kapasitas_default")
 
     # ================================================================
     # 0. NOTIFIKASI PERINGATAN H-10 SURVEI SISWA

@@ -32,6 +32,7 @@ THEME_TOKENS = {
     },
 }
 
+
 def apply_theme(mode: str):
     c = THEME_TOKENS.get(mode, THEME_TOKENS["moon"])
     st.markdown(
@@ -44,13 +45,25 @@ def apply_theme(mode: str):
             background-color: {c["bg_app"]} !important;
             color: {c["text_primary"]} !important;
         }}
-        #MainMenu, footer {{ visibility: hidden; }}
+        /* Sembunyikan menu bawaan (hamburger "Deploy"/GitHub) & footer saja.
+           JANGAN sembunyikan seluruh header/toolbar — tombol buka/tutup
+           sidebar ("collapsedControl" / "stSidebarCollapseButton") hidup di
+           dalam header, sehingga kalau header disembunyikan total, sidebar
+           jadi tidak bisa dibuka sama sekali. */
+        footer {{ visibility: hidden; }}
         header {{ background: transparent !important; }}
-        header [data-testid="stToolbar"] {{ visibility: hidden; }}
-        header [data-testid="stSidebarCollapseButton"],
-        [data-testid="collapsedControl"] {{
+        #MainMenu {{ visibility: hidden; }}
+
+        /* Pastikan tombol sidebar tetap terlihat & berwarna sesuai tema */
+        [data-testid="stSidebarCollapseButton"] button,
+        [data-testid="collapsedControl"] button,
+        [data-testid="collapsedControl"] svg,
+        [data-testid="stSidebarCollapseButton"] svg {{
             visibility: visible !important;
+            display: flex !important;
+            opacity: 1 !important;
             color: {c["text_primary"]} !important;
+            fill: {c["text_primary"]} !important;
         }}
         .block-container {{ padding-top: 1.5rem !important; max-width: 1240px !important; }}
 
@@ -80,9 +93,89 @@ def apply_theme(mode: str):
         }}
         section[data-testid="stSidebar"] * {{ color: {c["text_primary"]} !important; }}
 
-        div[data-baseweb="select"] > div {{
+        /* ============================================================
+           NAVIGASI SIDEBAR — ubah st.radio bawaan (bulatan + label polos)
+           jadi pill/segmented button yang selaras tema, bukan widget
+           default Streamlit yang kelihatan generik.
+           ============================================================ */
+        .nav-pills [role="radiogroup"] {{
+            gap: 6px !important;
+        }}
+        .nav-pills label[data-baseweb="radio"] {{
+            background-color: {c["bg_surface"]} !important;
+            border: 1px solid {c["border"]} !important;
+            border-radius: 8px !important;
+            padding: 10px 14px !important;
+            margin-bottom: 0 !important;
+            cursor: pointer;
+            transition: background-color .15s ease, border-color .15s ease;
+        }}
+        .nav-pills label[data-baseweb="radio"]:hover {{
+            border-color: {c["accent"]} !important;
+        }}
+        /* Sembunyikan bulatan radio asli — bentuknya sudah jadi pill utuh */
+        .nav-pills label[data-baseweb="radio"] > div:first-child {{
+            display: none !important;
+        }}
+        .nav-pills label[data-baseweb="radio"] div[data-testid="stMarkdownContainer"] p {{
+            font-weight: 600 !important;
+            font-size: 14px !important;
+            margin: 0 !important;
+        }}
+        /* State terpilih — isi solid warna aksen, teks putih */
+        .nav-pills label[data-baseweb="radio"]:has(input:checked) {{
+            background-color: {c["accent"]} !important;
+            border-color: {c["accent"]} !important;
+        }}
+        .nav-pills label[data-baseweb="radio"]:has(input:checked) * {{
+            color: #FFFFFF !important;
+        }}
+
+        /* ============================================================
+           WIDGET NATIVE — sebelumnya cuma selectbox yang diwarnai di
+           sini, sehingga text_input / number_input / date_input /
+           text_area tetap ikut tema default Streamlit (biasanya gelap
+           kalau OS/browser pengguna dark mode) walau app_theme = light.
+           Selector di bawah ini menyamakan SEMUA kotak input.
+           ============================================================ */
+        div[data-baseweb="select"] > div,
+        div[data-baseweb="input"],
+        div[data-baseweb="textarea"],
+        div[data-baseweb="base-input"],
+        div[data-baseweb="datepicker"] > div,
+        div[data-baseweb="popover"] div[role="listbox"] {{
             background-color: {c["bg_surface"]} !important;
             border-color: {c["border"]} !important;
+            color: {c["text_primary"]} !important;
+        }}
+        div[data-baseweb="select"] span,
+        div[data-baseweb="input"] input,
+        div[data-baseweb="textarea"] textarea,
+        div[data-baseweb="base-input"] input,
+        div[data-baseweb="datepicker"] input {{
+            color: {c["text_primary"]} !important;
+            background-color: transparent !important;
+        }}
+        /* Opsi dropdown (selectbox terbuka, kalender date_input) */
+        ul[role="listbox"] li,
+        div[data-baseweb="calendar"],
+        div[data-baseweb="calendar"] * {{
+            background-color: {c["bg_surface"]} !important;
+            color: {c["text_primary"]} !important;
+        }}
+        ul[role="listbox"] li:hover {{
+            background-color: {c["accent_soft"]} !important;
+        }}
+        /* Stepper +/- pada number_input */
+        [data-testid="stNumberInputStepUp"],
+        [data-testid="stNumberInputStepDown"] {{
+            background-color: {c["bg_surface"]} !important;
+            color: {c["text_primary"]} !important;
+            border-color: {c["border"]} !important;
+        }}
+        /* Checkbox & radio label */
+        [data-testid="stCheckbox"] label p,
+        [data-testid="stRadio"] label p {{
             color: {c["text_primary"]} !important;
         }}
 

@@ -5,6 +5,7 @@ from datetime import datetime, date
 from services.gsheets import load_data, load_data_fresh, add_row, update_row, delete_row, COLUMNS
 from components.theme import apply_theme
 from components.dashboard_view import render_dashboard
+from components.data_table import render_data_table_html
 from utils.dates import parse_date, format_date
 from config import get_config
 
@@ -70,13 +71,9 @@ with st.sidebar:
     page_keys = list(PAGES.keys())
     page_labels = [f"{PAGES[k][1]}" for k in page_keys]
     current_idx = page_keys.index(st.session_state["active_page"])
-
-    st.markdown('<div class="nav-pills">', unsafe_allow_html=True)
     chosen_label = st.radio(
         "Halaman", page_labels, index=current_idx, label_visibility="collapsed"
     )
-    st.markdown("</div>", unsafe_allow_html=True)
-
     chosen_key = page_keys[page_labels.index(chosen_label)]
     if chosen_key != st.session_state["active_page"]:
         st.session_state["active_page"] = chosen_key
@@ -159,46 +156,26 @@ elif active_page == "lihat":
     if df.empty:
         st.info("Tidak ada data yang cocok dengan filter yang dipilih. Coba ubah atau reset filter di sidebar.")
     else:
-        display_df = df.drop(columns=["_TGL_EFEKTIF", "_TGL_SELESAI_EFEKTIF"], errors="ignore").reset_index(
-            drop=True
-        )
-        event = st.dataframe(
-            display_df,
-            width="stretch",
-            hide_index=True,
-            on_select="rerun",
-            selection_mode="single-row",
-            column_config={
-                "CHECK": st.column_config.CheckboxColumn("Selesai?", help="Status penyelesaian program"),
-                "PESERTA": st.column_config.NumberColumn("Peserta", format="%d"),
-            },
-        )
-
-        selected_rows = event.selection.rows if event is not None and event.selection else []
-        sel_no = None
-        if selected_rows:
-            sel_row = display_df.iloc[selected_rows[0]]
-            if pd.notna(sel_row["NO"]):
-                sel_no = int(float(sel_row["NO"]))
+        st.markdown(render_data_table_html(df, c_theme), unsafe_allow_html=True)
 
         st.divider()
+        st.markdown("**Aksi Cepat Baris**")
+        valid_no = [str(int(float(v))) for v in df["NO"].dropna() if str(v).replace(".", "", 1).isdigit()]
+        sel_no = st.selectbox("Pilih NO baris untuk diedit / dihapus", ["-"] + valid_no)
+        ac1, ac2 = st.columns(2)
 
-        if sel_no is None:
-            st.caption(":material/ads_click: Klik salah satu baris di tabel untuk mengedit atau menghapusnya.")
-        else:
-            row_match = df_raw[df_raw["NO"] == sel_no]
-            nama_program = row_match.iloc[0]["PROGRAM PELATIHAN"] if not row_match.empty else "-"
-            st.markdown(f"**Baris terpilih:** NO {sel_no} — {nama_program}")
-
-            ac1, ac2 = st.columns(2)
-            with ac1:
-                if st.button("Edit baris ini", width="stretch", icon=":material/edit:"):
-                    st.session_state["edit_no"] = sel_no
-                    go_to("edit")
-                    st.rerun()
-            with ac2:
-                if st.button("Hapus baris ini", width="stretch", icon=":material/delete:"):
-                    st.session_state["confirm_delete_no"] = sel_no
+        with ac1:
+            if st.button(
+                "Edit baris ini", width="stretch", disabled=(sel_no == "-"), icon=":material/edit:"
+            ):
+                st.session_state["edit_no"] = int(sel_no)
+                go_to("edit")
+                st.rerun()
+        with ac2:
+            if st.button(
+                "Hapus baris ini", width="stretch", disabled=(sel_no == "-"), icon=":material/delete:"
+            ):
+                st.session_state["confirm_delete_no"] = int(sel_no)
 
         if st.session_state.get("confirm_delete_no") is not None:
             no_target = st.session_state["confirm_delete_no"]
@@ -264,23 +241,27 @@ elif active_page == "edit":
             "Sudah Selesai (CHECK)", value=bool(editing_row["CHECK"]) if editing_row is not None else False
         )
 
-        st.caption("Isi minimal salah satu pasangan tanggal (Aktual atau Rencana) agar program muncul di grafik jadwal & peringatan H-10.")
+        st.caption("Isi minimal salah satu pasangan tanggal (Aktual atau Rencana) agar program muncul di grafik jadwal & peringatan H-10. Format: Tanggal/Bulan/Tahun.")
         d1, d2, d3, d4 = st.columns(4)
         t_mulai = d1.date_input(
             "Tgl Mulai (Aktual)",
             value=parse_date(editing_row.get("TANGGAL MULAI")) if editing_row is not None else None,
+            format="DD/MM/YYYY",
         )
         t_selesai = d2.date_input(
             "Tgl Selesai (Aktual)",
             value=parse_date(editing_row.get("TANGGAL SELESAI")) if editing_row is not None else None,
+            format="DD/MM/YYYY",
         )
         r_mulai = d3.date_input(
             "Rencana Mulai",
             value=parse_date(editing_row.get("RENCANA MULAI")) if editing_row is not None else None,
+            format="DD/MM/YYYY",
         )
         r_selesai = d4.date_input(
             "Rencana Selesai",
             value=parse_date(editing_row.get("RENCANA SELESAI")) if editing_row is not None else None,
+            format="DD/MM/YYYY",
         )
         ket = st.text_area("Keterangan", value=editing_row["KETERANGAN"] if editing_row is not None else "", height=80)
 

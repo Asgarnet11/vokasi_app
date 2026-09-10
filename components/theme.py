@@ -32,7 +32,6 @@ THEME_TOKENS = {
     },
 }
 
-
 def apply_theme(mode: str):
     c = THEME_TOKENS.get(mode, THEME_TOKENS["moon"])
     st.markdown(
@@ -93,89 +92,9 @@ def apply_theme(mode: str):
         }}
         section[data-testid="stSidebar"] * {{ color: {c["text_primary"]} !important; }}
 
-        /* ============================================================
-           NAVIGASI SIDEBAR — ubah st.radio bawaan (bulatan + label polos)
-           jadi pill/segmented button yang selaras tema, bukan widget
-           default Streamlit yang kelihatan generik.
-           ============================================================ */
-        .nav-pills [role="radiogroup"] {{
-            gap: 6px !important;
-        }}
-        .nav-pills label[data-baseweb="radio"] {{
-            background-color: {c["bg_surface"]} !important;
-            border: 1px solid {c["border"]} !important;
-            border-radius: 8px !important;
-            padding: 10px 14px !important;
-            margin-bottom: 0 !important;
-            cursor: pointer;
-            transition: background-color .15s ease, border-color .15s ease;
-        }}
-        .nav-pills label[data-baseweb="radio"]:hover {{
-            border-color: {c["accent"]} !important;
-        }}
-        /* Sembunyikan bulatan radio asli — bentuknya sudah jadi pill utuh */
-        .nav-pills label[data-baseweb="radio"] > div:first-child {{
-            display: none !important;
-        }}
-        .nav-pills label[data-baseweb="radio"] div[data-testid="stMarkdownContainer"] p {{
-            font-weight: 600 !important;
-            font-size: 14px !important;
-            margin: 0 !important;
-        }}
-        /* State terpilih — isi solid warna aksen, teks putih */
-        .nav-pills label[data-baseweb="radio"]:has(input:checked) {{
-            background-color: {c["accent"]} !important;
-            border-color: {c["accent"]} !important;
-        }}
-        .nav-pills label[data-baseweb="radio"]:has(input:checked) * {{
-            color: #FFFFFF !important;
-        }}
-
-        /* ============================================================
-           WIDGET NATIVE — sebelumnya cuma selectbox yang diwarnai di
-           sini, sehingga text_input / number_input / date_input /
-           text_area tetap ikut tema default Streamlit (biasanya gelap
-           kalau OS/browser pengguna dark mode) walau app_theme = light.
-           Selector di bawah ini menyamakan SEMUA kotak input.
-           ============================================================ */
-        div[data-baseweb="select"] > div,
-        div[data-baseweb="input"],
-        div[data-baseweb="textarea"],
-        div[data-baseweb="base-input"],
-        div[data-baseweb="datepicker"] > div,
-        div[data-baseweb="popover"] div[role="listbox"] {{
+        div[data-baseweb="select"] > div {{
             background-color: {c["bg_surface"]} !important;
             border-color: {c["border"]} !important;
-            color: {c["text_primary"]} !important;
-        }}
-        div[data-baseweb="select"] span,
-        div[data-baseweb="input"] input,
-        div[data-baseweb="textarea"] textarea,
-        div[data-baseweb="base-input"] input,
-        div[data-baseweb="datepicker"] input {{
-            color: {c["text_primary"]} !important;
-            background-color: transparent !important;
-        }}
-        /* Opsi dropdown (selectbox terbuka, kalender date_input) */
-        ul[role="listbox"] li,
-        div[data-baseweb="calendar"],
-        div[data-baseweb="calendar"] * {{
-            background-color: {c["bg_surface"]} !important;
-            color: {c["text_primary"]} !important;
-        }}
-        ul[role="listbox"] li:hover {{
-            background-color: {c["accent_soft"]} !important;
-        }}
-        /* Stepper +/- pada number_input */
-        [data-testid="stNumberInputStepUp"],
-        [data-testid="stNumberInputStepDown"] {{
-            background-color: {c["bg_surface"]} !important;
-            color: {c["text_primary"]} !important;
-            border-color: {c["border"]} !important;
-        }}
-        /* Checkbox & radio label */
-        [data-testid="stCheckbox"] label p,
-        [data-testid="stRadio"] label p {{
             color: {c["text_primary"]} !important;
         }}
 
@@ -209,6 +128,103 @@ def apply_theme(mode: str):
         .stProgress > div > div > div > div {{ background-color: {c["accent"]} !important; }}
 
         hr {{ border-color: {c["border"]} !important; }}
+
+        /* ============================================================
+           WIDGET FORM — sebelumnya tidak ditema sama sekali sehingga
+           tetap memakai warna gelap bawaan Streamlit (terlihat "nyasar"
+           saat aplikasi dalam mode terang). Sekarang semua disamakan
+           dengan c_theme.
+           ============================================================ */
+
+        /* Label semua widget (Program Pelatihan*, Lokasi, dst) —
+           sebelumnya kontrasnya terlalu rendah/pudar */
+        label, div[data-testid="stWidgetLabel"] p, div[data-testid="stWidgetLabel"] label {{
+            color: {c["text_primary"]} !important;
+            font-weight: 500 !important;
+            opacity: 1 !important;
+        }}
+
+        /* Text input, number input, text area, date input */
+        .stTextInput input,
+        .stNumberInput input,
+        .stTextArea textarea,
+        .stDateInput input {{
+            background-color: {c["bg_surface"]} !important;
+            color: {c["text_primary"]} !important;
+            border: 1px solid {c["border"]} !important;
+            border-radius: 6px !important;
+        }}
+        .stTextInput input:focus,
+        .stNumberInput input:focus,
+        .stTextArea textarea:focus,
+        .stDateInput input:focus {{
+            border-color: {c["accent"]} !important;
+            box-shadow: 0 0 0 1px {c["accent"]} !important;
+        }}
+        .stTextInput input::placeholder,
+        .stNumberInput input::placeholder,
+        .stTextArea textarea::placeholder {{
+            color: {c["text_secondary"]} !important;
+            opacity: 0.8;
+        }}
+
+        /* Tombol +/- pada number_input */
+        .stNumberInput button {{
+            background-color: {c["bg_surface"]} !important;
+            border: 1px solid {c["border"]} !important;
+            color: {c["text_primary"]} !important;
+        }}
+        .stNumberInput button:hover {{
+            border-color: {c["accent"]} !important;
+            color: {c["accent"]} !important;
+        }}
+
+        /* Checkbox (BaseWeb) — sebelumnya kotak hitam solid, sulit
+           dibedakan checked/unchecked */
+        div[data-baseweb="checkbox"] > div:first-child {{
+            background-color: {c["bg_surface"]} !important;
+            border: 1.5px solid {c["border"]} !important;
+        }}
+        div[data-baseweb="checkbox"] input:checked ~ div {{
+            background-color: {c["accent"]} !important;
+            border-color: {c["accent"]} !important;
+        }}
+        .stCheckbox label p {{ color: {c["text_primary"]} !important; }}
+
+        /* Radio (navigasi sidebar & filter status) — sebelumnya bulatan
+           merah bawaan Streamlit, tidak mengikuti aksen tema */
+        div[data-baseweb="radio"] > label > div:first-child {{
+            border-color: {c["text_secondary"]} !important;
+        }}
+        div[data-baseweb="radio"] input:checked + div {{
+            border-color: {c["accent"]} !important;
+        }}
+        div[data-baseweb="radio"] input:checked + div > div {{
+            background-color: {c["accent"]} !important;
+        }}
+        .stRadio label p {{ color: {c["text_primary"]} !important; }}
+
+        /* Toggle (mode gelap) */
+        div[data-baseweb="checkbox"][aria-checked] {{ accent-color: {c["accent"]}; }}
+        .stToggle [data-baseweb="checkbox"] div[aria-checked="true"] {{
+            background-color: {c["accent"]} !important;
+        }}
+
+        /* Kalender popover date_input */
+        div[data-baseweb="calendar"] {{
+            background-color: {c["bg_surface"]} !important;
+            color: {c["text_primary"]} !important;
+        }}
+        div[data-baseweb="calendar"] button {{ color: {c["text_primary"]} !important; }}
+
+        /* Tombol "Batal" (secondary) — pastikan teks tetap kontras */
+        button[kind="secondary"] p {{ color: {c["text_primary"]} !important; }}
+        button[kind="primary"] p {{ color: #FFFFFF !important; }}
+
+        /* Caption / helper text */
+        .stCaption, [data-testid="stCaptionContainer"] p {{
+            color: {c["text_secondary"]} !important;
+        }}
         </style>
         """,
         unsafe_allow_html=True,

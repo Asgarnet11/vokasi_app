@@ -1,79 +1,153 @@
-# Monitoring Program Pelatihan Vokasi — Streamlit App
+# Monitoring Program Pelatihan Vokasi — BPVP Kendari
 
-Dashboard, tabel data, dan form edit — semua terhubung **live** ke Google Sheets kamu (baca & tulis dua arah).
+Dashboard pemantauan, pengelolaan data, dan kapasitas program pelatihan vokasi berbasis **Streamlit** yang terhubung dua arah (_real-time read & write_) ke **Google Sheets**.
 
-## Struktur Project
+---
+
+## Fitur Utama
+
+1. **Sistem Tema Hybrid (Sun / Light & Moon / Dark)**
+   Pengalihan mode terang dan gelap langsung lewat _toggle_ di sidebar, tanpa konflik warna teks maupun kontras grafik.
+
+2. **Dashboard Target & Capaian Kuota Pelatihan**
+   - Kartu metrik utama dengan capaian siswa 0–100%.
+   - Kartu hierarki kuota per **Kejuruan (Bidang)**, lengkap dengan rincian program di dalamnya.
+
+3. **Visualisasi Berorientasi Horizontal**
+   - **Grafik Kuota Siswa per Kejuruan** — batang horizontal untuk membandingkan kapasitas tiap jurusan.
+   - **Grafik Sebaran Jadwal** — visualisasi bulanan berbasis tanggal efektif program.
+
+4. **Peringatan Dini Survei Pelatihan (Notifikasi H-10)**
+   Banner otomatis untuk program yang berada ≤ 10 hari menuju akhir masa pelatihan, agar siswa segera diarahkan mengisi survei/evaluasi.
+
+5. **Kelola Data Interaktif**
+   - Tabel data dengan multi-filter (Bidang, Program, Lokasi, Status Selesai).
+   - Tambah, edit, dan hapus baris — langsung tersinkron ke Google Sheets.
+
+---
+
+## Struktur Data Google Sheets
+
+Worksheet wajib bernama **`Reg`**, dengan header berikut di baris pertama:
+
+| Kolom               | Tipe Data | Keterangan                                             |
+| ------------------- | --------- | ------------------------------------------------------ |
+| `NO`                | Numerik   | Nomor indeks baris                                     |
+| `BIDANG`            | Teks      | Nama kejuruan (mis. _Teknologi Informasi_, _Otomotif_) |
+| `PROGRAM PELATIHAN` | Teks      | Nama kelas pelatihan vokasi                            |
+| `CHECK`             | Boolean   | Status selesai (`TRUE`/`FALSE` atau `1`/`0`)           |
+| `PESERTA`           | Numerik   | Jumlah kuota siswa yang terdaftar/terisi               |
+| `LOKASI`            | Teks      | Tempat pelaksanaan (mis. _BPVP Kendari_, _LPK_, _BLK_) |
+| `TANGGAL MULAI`     | Tanggal   | Format: `DD MMM YYYY` (contoh: `12 Jan 2026`)          |
+| `TANGGAL SELESAI`   | Tanggal   | Format: `DD MMM YYYY`                                  |
+| `RENCANA MULAI`     | Tanggal   | Tanggal estimasi mulai                                 |
+| `RENCANA SELESAI`   | Tanggal   | Tanggal estimasi selesai                               |
+| `KETERANGAN`        | Teks      | Catatan tambahan program                               |
+
+---
+
+## Instalasi & Pengaturan Lokal
+
+### 1. Kloning repositori & instal dependensi
+
+```bash
+git clone <URL_REPOSITORY_ANDA>
+cd Dashboard-Pelatihan-Vokasi
+pip install -r requirements.txt
+```
+
+Pastikan `requirements.txt` berisi dependensi berikut:
 
 ```
-app.py                # Entry point: navigasi, sidebar, filter, 3 halaman utama
-gsheets.py            # Semua interaksi Google Sheets (load, add_row, update_row, delete_row, save_data)
-dashboard_view.py      # Komponen visual dashboard (card kuota, grafik, notifikasi H-10)
-theme.py               # Token warna & CSS tema light/moon
-config.py              # Konfigurasi terpusat (kapasitas default, TTL cache, dsb — bisa dioverride di secrets.toml)
-utils/dates.py          # Parsing & format tanggal terpusat (dipakai app.py & gsheets.py)
+streamlit>=1.35.0
+pandas>=2.0.0
+plotly>=5.18.0
+gspread>=6.0.0
+google-auth>=2.20.0
 ```
 
-> Catatan: struktur ini **flat** (tidak pakai folder `services/`, `components/`). Kalau kamu ingin
-> struktur berfolder, sesuaikan juga baris `import` di `app.py` (`from services.gsheets import ...`
-> jadi `from gsheets import ...`, dst).
+### 2. Konfigurasi Google Service Account
 
-## Perubahan Utama dari Versi Sebelumnya
+1. Buka [Google Cloud Console](https://console.cloud.google.com/) dan buat proyek baru.
+2. Aktifkan **Google Sheets API** dan **Google Drive API**.
+3. Masuk ke **IAM & Admin → Service Accounts → Create Service Account**.
+4. Buka akun yang baru dibuat → tab **Keys → Add Key → Create New Key (JSON)** → simpan berkas kuncinya.
+5. Buka spreadsheet Google Sheets Anda, klik **Share**, lalu tempelkan alamat surel `client_email` dari berkas JSON tersebut dengan peran **Editor**.
 
-- **Keamanan data**: `save_data()` kini membuat backup sebelum menulis dan melakukan rollback otomatis jika gagal di tengah proses. Operasi tambah/edit/hapus harian sekarang memakai `add_row` / `update_row` / `delete_row` yang menulis **hanya baris terkait** (bukan clear+rewrite seluruh sheet) — lebih cepat dan lebih aman untuk pemakaian bersama tim.
-- **Konfirmasi hapus**: menghapus baris sekarang memunculkan dialog konfirmasi, tidak langsung tereksekusi.
-- **Navigasi Edit**: memilih "Edit baris ini" langsung memindahkan tampilan ke halaman Edit (tidak perlu pindah tab manual).
-- **Validasi form**: pengecekan tanggal logis (selesai ≥ mulai), minimal satu pasang tanggal terisi, dan peringatan jika peserta melebihi kapasitas.
-- **Filter berjenjang**: pilihan Program & Lokasi di sidebar menyempit mengikuti Bidang yang dipilih.
-- **Feedback proses**: spinner saat menyimpan/menghapus, toast konfirmasi setelah berhasil.
-- **Konfigurasi terpusat**: kapasitas default, nama worksheet, TTL cache, dan ambang hari peringatan H-10 kini ada di `config.py` / bisa dioverride lewat `st.secrets["app_config"]`, tidak lagi hardcode di dalam kode.
+### 3. Pengaturan kredensial (`secrets.toml`)
 
-## Struktur data yang dibutuhkan di Google Sheets
+Buat folder `.streamlit` di direktori utama proyek, lalu buat berkas `secrets.toml` di dalamnya:
 
-Buat/pastikan ada sheet bernama **`Data`** dengan kolom header persis seperti ini di baris 1:
-
-```
-NO | BIDANG | PROGRAM PELATIHAN | CHECK | LOKASI | TANGGAL MULAI | TANGGAL SELESAI | RENCANA MULAI | RENCANA SELESAI | KETERANGAN
+```bash
+mkdir -p .streamlit
+touch .streamlit/secrets.toml
 ```
 
-(File `data_untuk_looker.xlsx` yang sudah dibuat sebelumnya bisa langsung dipakai — upload ke Drive, buka dengan Sheets, hapus kolom "SELESAI" bantuannya kalau tidak dipakai.)
+Isi `.streamlit/secrets.toml` dengan konfigurasi akun layanan Anda:
 
-## Setup (sekali saja)
+```toml
+[connections.gsheets]
+spreadsheet = "https://docs.google.com/spreadsheets/d/<ID_SPREADSHEET_ANDA>/edit"
 
-1. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+type = "service_account"
+project_id = "monitoring-vokasi"
+private_key_id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+private_key = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+client_email = "xxxxxx@monitoring-vokasi.iam.gserviceaccount.com"
+client_id = "xxxxxxxxxxxxxxxxxxxx"
+auth_uri = "https://accounts.google.com/o/oauth2/auth"
+token_uri = "https://oauth2.googleapis.com/token"
+auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
+client_x509_cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/xxxxxx"
+```
 
-2. **Buat Service Account di Google Cloud**
-   - Buka [console.cloud.google.com](https://console.cloud.google.com) → buat project (atau pakai yang ada).
-   - Aktifkan **Google Sheets API** dan **Google Drive API**.
-   - Ke *IAM & Admin* → *Service Accounts* → *Create Service Account*.
-   - Setelah dibuat, buka service account itu → tab *Keys* → *Add Key* → *Create new key* → pilih **JSON** → download.
+> **Peringatan:** Jangan pernah menambahkan `secrets.toml` ke repositori publik Git. Pastikan `.streamlit/secrets.toml` tercantum di `.gitignore`.
 
-3. **Share spreadsheet kamu ke service account**
-   - Buka file JSON yang didownload, cari `client_email` (formatnya `xxx@xxx.iam.gserviceaccount.com`).
-   - Di Google Sheets kamu, klik **Bagikan** → paste email itu → beri akses **Editor**.
+### 4. Menjalankan dashboard
 
-4. **Isi secrets.toml**
-   - Copy `.streamlit/secrets.toml.example` jadi `.streamlit/secrets.toml`.
-   - Isi `spreadsheet` dengan URL sheet kamu.
-   - Isi sisanya dari file JSON service account tadi (field-nya sama persis namanya).
+```bash
+streamlit run app.py
+```
 
-5. **Jalankan**
-   ```bash
-   streamlit run app.py
-   ```
+Buka peramban di [http://localhost:8501](http://localhost:8501).
 
-## Fitur
+---
 
-- **Dashboard** — card otomatis per BIDANG (mengikuti data, tidak perlu di-set manual), format `x/y`, progress bar, warna hijau kalau 100% selesai, abu-abu kalau belum ada paket.
-- **Lihat Data** — tabel dengan filter Bidang / Program / Lokasi / Status, plus aksi Edit & Hapus per baris.
-- **Edit Data** — form tambah/edit satu paket pelatihan, langsung tersimpan ke Google Sheets saat klik Simpan.
+## Panduan Deployment (Streamlit Community Cloud)
 
-## Deploy online (opsional)
+1. Unggah kode ke repositori GitHub Anda.
+2. Kunjungi [share.streamlit.io](https://share.streamlit.io) dan masuk dengan akun GitHub.
+3. Pilih repositori, cabang (_branch_), dan tentukan berkas utama ke `app.py`.
+4. Buka menu **Advanced settings → Secrets**.
+5. Salin seluruh isi `.streamlit/secrets.toml` lokal Anda, lalu tempelkan ke kolom isian tersebut.
+6. Klik **Deploy** — dashboard siap digunakan bersama tim secara live.
 
-Kalau mau dashboard ini bisa diakses tim tanpa perlu jalanin di laptop:
-1. Push folder ini ke repo GitHub (jangan ikut commit `secrets.toml` asli — sudah ada di `.gitignore`).
-2. Buka [share.streamlit.io](https://share.streamlit.io) → New app → hubungkan ke repo.
-3. Di *Advanced settings* → *Secrets*, paste isi `secrets.toml` kamu.
-4. Deploy — dapat link publik yang auto-update setiap ada perubahan di Google Sheets.
+---
+
+## Arsitektur Berkas
+
+```
+├── .streamlit/
+│   └── secrets.toml          # Kredensial koneksi Google Sheets (rahasia)
+├── components/
+│   ├── dashboard_view.py     # Logika kartu metrik, notifikasi H-10, & grafik Plotly
+│   ├── data_table.py         # Tabel data HTML custom mengikuti tema aktif
+│   └── theme.py              # Injeksi CSS dinamis & token palet Hybrid
+├── services/
+│   └── gsheets.py            # Autentikasi gspread, caching, & sanitasi data
+├── utils/
+│   └── dates.py              # Parsing & formatting tanggal terpusat
+├── config.py                 # Konfigurasi aplikasi (bisa dioverride via secrets)
+├── app.py                    # Entry point aplikasi & orkestrasi tampilan halaman
+├── requirements.txt          # Dependensi pustaka Python
+└── README.md                 # Dokumentasi panduan operasional
+```
+
+---
+
+## Kredit & Kontributor
+
+| Nama                     | Peran                                           | GitHub                                       |
+| ------------------------ | ----------------------------------------------- | -------------------------------------------- |
+| **Argita Trihapsari**    | Pembuat pertama / inisiator proyek `vokasi_app` | [@Argittt](https://github.com/Argittt)       |
+| **Muh Asgar Fatwahyudi** | Pengembangan lanjutan & perbaikan               | [@Asgarnet11](https://github.com/Asgarnet11) |

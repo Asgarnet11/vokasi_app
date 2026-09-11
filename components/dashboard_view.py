@@ -284,13 +284,36 @@ def render_dashboard(df: pd.DataFrame, c_theme: dict):
         kuota_jurusan = kuota_jurusan.sort_values(by="kuota_target", ascending=True)
 
         fig_rtl = go.Figure()
+
+        # Layer bayangan — bar penuh (kuota_target) diberi warna gelap
+        # transparan dan sedikit digeser + dilebarkan lewat offsetgroup
+        # terpisah, supaya "mengintip" di belakang batang data dan
+        # memberi kesan blok timbul (pseudo-3D), tanpa mengubah skala/nilai
+        # data aslinya sama sekali.
+        fig_rtl.add_trace(
+            go.Bar(
+                name="_shadow",
+                y=kuota_jurusan["BIDANG"],
+                x=kuota_jurusan["kuota_target"],
+                orientation="h",
+                marker=dict(color="rgba(36,30,21,0.16)", line=dict(width=0)),
+                offsetgroup="shadow",
+                offset=0.03,
+                width=0.62,
+                hoverinfo="skip",
+                showlegend=False,
+            )
+        )
         fig_rtl.add_trace(
             go.Bar(
                 name="Terisi",
                 y=kuota_jurusan["BIDANG"],
                 x=kuota_jurusan["terisi"],
                 orientation="h",
-                marker=dict(color=c_theme["accent"], line=dict(width=0)),
+                marker=dict(color=c_theme["accent"], line=dict(color="rgba(255,255,255,0.35)", width=1)),
+                offsetgroup="data",
+                offset=-0.03,
+                width=0.56,
                 customdata=kuota_jurusan["pct"],
                 hovertemplate="<b>%{y}</b><br>Terisi: %{x:,.0f} siswa<br>Capaian: %{customdata:.1f}%<extra></extra>",
             )
@@ -301,7 +324,10 @@ def render_dashboard(df: pd.DataFrame, c_theme: dict):
                 y=kuota_jurusan["BIDANG"],
                 x=kuota_jurusan["sisa"],
                 orientation="h",
-                marker=dict(color=c_theme["accent_soft"], line=dict(width=0)),
+                marker=dict(color=c_theme["accent_soft"], line=dict(color="rgba(255,255,255,0.35)", width=1)),
+                offsetgroup="data",
+                offset=-0.03,
+                width=0.56,
                 hovertemplate="<b>%{y}</b><br>Sisa: %{x:,.0f} siswa<extra></extra>",
             )
         )
@@ -315,7 +341,7 @@ def render_dashboard(df: pd.DataFrame, c_theme: dict):
             font=dict(family="Inter, sans-serif", color=c_theme["text_secondary"], size=12),
             hovermode="closest",
             hoverlabel=dict(bgcolor=c_theme["bg_surface"], font_color=c_theme["text_primary"], bordercolor=c_theme["border"]),
-            bargap=0.35,
+            bargap=0.15,
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(color=c_theme["text_secondary"])),
             xaxis=dict(
                 showgrid=True,

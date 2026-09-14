@@ -283,16 +283,17 @@ def render_dashboard(df: pd.DataFrame, c_theme: dict):
     with col_grid:
         cards_html = "".join(
             _md(f"""
-            <div style="background:{c_theme['bg_surface']}; border:1px solid {c_theme['border']};
+            <div style="background:{c_theme['accent_soft'] if persen >= 100 else c_theme['bg_surface']};
+                        border:1px solid {c_theme['border']};
                         border-radius:12px; padding:14px 16px;
-                        box-shadow:0 1px 2px rgba(0,0,0,0.06); opacity:{0.6 if persen >= 100 else 1};">
+                        box-shadow:0 1px 2px rgba(0,0,0,0.06);">
                 <div style="font-size:12.5px; font-weight:700; color:{c_theme['text_primary']};
                             margin-bottom:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
                      title="{bidang}">
                     {bidang}
                 </div>
                 <div style="display:flex; align-items:center; gap:10px;">
-                    {render_donut_svg(persen, c_theme, size=48, stroke=7, muted=(persen >= 100))}
+                    {render_donut_svg(persen, c_theme, size=48, stroke=7)}
                     <div style="font-size:19px; font-weight:800; color:{c_theme['text_primary']};">
                         {persen:.1f}%
                     </div>
@@ -304,9 +305,9 @@ def render_dashboard(df: pd.DataFrame, c_theme: dict):
             """)
             for bidang, persen, sisa in per_bidang_stat
         )
-        # CSS grid dengan jumlah kolom TETAP (bukan flex-wrap) supaya posisi
+       # CSS grid dengan jumlah kolom TETAP (bukan flex-wrap) supaya posisi
         # tiap card stabil dan tidak "reflow"/geser saat lebar layar sedikit
-        # berubah. Tanpa batas tinggi/overflow, jadi kartu apa pun jumlahnya
+        # berubah. Tanpa batas tinggi/overflo, jadi kartu apa pun jumlahnya
         # tidak akan terpotong — tinggi menyesuaikan otomatis.
         st.markdown(
             _md(f'<div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px;">{cards_html}</div>'),

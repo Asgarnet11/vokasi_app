@@ -221,6 +221,22 @@ def apply_theme(mode: str):
         button[kind="secondary"] p {{ color: {c["text_primary"]} !important; }}
         button[kind="primary"] p {{ color: #FFFFFF !important; }}
 
+        /* Tombol aksi yang "menyatu" dengan card di atasnya (mis. tombol
+           "Lihat X Selesai" di bawah card Total Selesai) — dipicu lewat
+           marker <div class="card-attach-marker"> tepat sebelum tombolnya */
+        .card-attach-marker {{ margin-bottom: -1px; }}
+        .card-attach-marker + div[data-testid="stButton"] button {{
+            border-radius: 0 0 12px 12px !important;
+            border-top: none !important;
+            border-color: {c["border"]} !important;
+            background-color: {c["bg_surface"]} !important;
+            margin-top: -1px !important;
+        }}
+        .card-attach-marker + div[data-testid="stButton"] button:hover {{
+            border-color: {c["accent"]} !important;
+            color: {c["accent"]} !important;
+        }}
+
         /* Caption / helper text */
         .stCaption, [data-testid="stCaptionContainer"] p {{
             color: {c["text_secondary"]} !important;

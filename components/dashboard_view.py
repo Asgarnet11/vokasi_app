@@ -70,34 +70,45 @@ def render_notification_h10(df: pd.DataFrame, c_theme: dict):
                     )
             st.divider()
 
-def render_donut_svg(percent: float, c_theme: dict, size: int = 56, stroke: int = 8) -> str:
+def render_donut_svg(percent: float, c_theme: dict, size: int = 56, stroke: int = 8, muted: bool = False) -> str:
     """SVG donut/gauge ring sederhana untuk menampilkan persentase capaian
-    per kejuruan, sesuai referensi desain koordinator."""
+    per kejuruan, sesuai referensi desain koordinator.
+
+    muted=True dipakai untuk kejuruan yang capaiannya sudah 100% — ring
+    dibuat pudar (warna netral, bukan warna aksen) supaya kejuruan yang
+    masih berjalan lebih menonjol secara visual dibanding yang sudah selesai.
+    """
     percent = min(max(percent, 0), 100)
     radius = (size / 2) - (stroke / 2)
     circumference = 2 * 3.14159265 * radius
     offset = circumference * (1 - percent / 100)
+    ring_color = c_theme["text_secondary"] if muted else c_theme["accent"]
     return f"""
-    <svg width="{size}" height="{size}" viewBox="0 0 {size} {size}" style="flex-shrink:0;">
+    <svg width="{size}" height="{size}" viewBox="0 0 {size} {size}" style="flex-shrink:0; opacity:{0.55 if muted else 1};">
         <circle cx="{size/2}" cy="{size/2}" r="{radius}" fill="none"
                 stroke="{c_theme['accent_soft']}" stroke-width="{stroke}"/>
         <circle cx="{size/2}" cy="{size/2}" r="{radius}" fill="none"
-                stroke="{c_theme['accent']}" stroke-width="{stroke}"
+                stroke="{ring_color}" stroke-width="{stroke}"
                 stroke-dasharray="{circumference:.2f}" stroke-dashoffset="{offset:.2f}"
                 stroke-linecap="round" transform="rotate(-90 {size/2} {size/2})"/>
     </svg>
     """
 
 
-def render_stat_card(label: str, value: str, c_theme: dict, sublabel: str = "", highlight: bool = False):
+def render_stat_card(label: str, value: str, c_theme: dict, sublabel: str = "", highlight: bool = False, attach_action: bool = False):
     """Card statistik kecil untuk grid ringkasan (dipetakan dari wireframe:
-    grid 2x2 kartu kecil di sebelah card yang di-highlight)."""
+    grid 2x2 kartu kecil di sebelah card yang di-highlight).
+
+    attach_action=True meratakan sudut bawah card (radius 0) supaya
+    menyatu secara visual dengan tombol aksi yang ditaruh langsung di
+    bawahnya (lihat CSS .card-attach-marker di theme.py)."""
     border_style = f"2px solid {c_theme['accent']}" if highlight else f"1px solid {c_theme['border']}"
+    radius = "12px 12px 0 0" if attach_action else "12px"
     with st.container(border=False):
         st.markdown(
             _md(f"""
             <div style="background:{c_theme['bg_surface']}; border:{border_style};
-                        border-radius:12px; padding:16px 18px; height:118px;
+                        border-radius:{radius}; padding:16px 18px; height:118px;
                         display:flex; flex-direction:column; justify-content:space-between;
                         box-shadow:0 1px 2px rgba(0,0,0,0.06);">
                 <div style="font-size:11.5px; font-weight:700; letter-spacing:0.03em;
@@ -150,18 +161,25 @@ def render_kuota_card(title, total_paket, total_target_kuota, total_siswa_terisi
         with m2:
             render_stat_card("Sisa Kuota", f"{sisa_kuota:,}".replace(",", "."), c_theme, "Siswa Belum Terisi")
         with m3:
-            render_stat_card("Total Selesai", f"{total_selesai:,}".replace(",", "."), c_theme, "Paket (Check)")
-            # Card "Total Selesai" bisa diklik untuk lihat daftar programnya —
-            # tombol ditaruh langsung di bawah card ini supaya jelas
-            # keterkaitannya, bukan HTML statis biasa.
-            if df_bidang is not None and total_selesai > 0:
+            has_action = df_bidang is not None and total_selesai > 0
+            render_stat_card(
+                "Total Selesai", f"{total_selesai:,}".replace(",", "."), c_theme,
+                "Paket (Check)", attach_action=has_action,
+            )
+            # Tombol dinempelkan langsung ke bagian bawah card (lihat CSS
+            # ".card-attach-marker + div[data-testid='stButton']" di
+            # theme.py) supaya terasa seperti satu kesatuan, bukan dua
+            # elemen terpisah.
+            if has_action:
                 toggle_key = f"show_selesai_{title}"
                 if toggle_key not in st.session_state:
                     st.session_state[toggle_key] = False
+                st.markdown('<div class="card-attach-marker"></div>', unsafe_allow_html=True)
                 if st.button(
-                    f"📋 Lihat {total_selesai} yang Sudah Selesai",
+                    f"Lihat {total_selesai} Selesai",
                     key=f"btn_{toggle_key}",
                     width="stretch",
+                    icon=":material/checklist:",
                 ):
                     st.session_state[toggle_key] = not st.session_state[toggle_key]
 
@@ -225,14 +243,15 @@ def render_dashboard(df: pd.DataFrame, c_theme: dict):
     tot_terisi = int(df["PESERTA"].sum())
     tot_persen = (tot_terisi / tot_target * 100) if tot_target > 0 else 0.0
 
-    # Hitung capaian % per kejuruan untuk card donut
-    per_bidang_persen = []
+    # Hitung capaian % per kejuruan untuk card donut (+ sisa kuota belum terisi)
+    per_bidang_stat = []
     for bidang in sorted([b for b in df["BIDANG"].dropna().unique() if str(b).strip()]):
         df_b = df[df["BIDANG"] == bidang]
         b_target = len(df_b) * KAPASITAS_DEFAULT
         b_terisi = int(df_b["PESERTA"].sum())
         b_persen = (b_terisi / b_target * 100) if b_target > 0 else 0.0
-        per_bidang_persen.append((bidang, b_persen))
+        b_sisa = max(0, b_target - b_terisi)
+        per_bidang_stat.append((bidang, b_persen, b_sisa))
 
     col_highlight, col_grid = st.columns([1, 2.6])
 
@@ -266,21 +285,24 @@ def render_dashboard(df: pd.DataFrame, c_theme: dict):
             _md(f"""
             <div style="background:{c_theme['bg_surface']}; border:1px solid {c_theme['border']};
                         border-radius:12px; padding:14px 16px; flex:1 1 160px; min-width:150px;
-                        box-shadow:0 1px 2px rgba(0,0,0,0.06);">
+                        box-shadow:0 1px 2px rgba(0,0,0,0.06); opacity:{0.6 if persen >= 100 else 1};">
                 <div style="font-size:12.5px; font-weight:700; color:{c_theme['text_primary']};
                             margin-bottom:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
                      title="{bidang}">
                     {bidang}
                 </div>
                 <div style="display:flex; align-items:center; gap:10px;">
-                    {render_donut_svg(persen, c_theme, size=48, stroke=7)}
+                    {render_donut_svg(persen, c_theme, size=48, stroke=7, muted=(persen >= 100))}
                     <div style="font-size:19px; font-weight:800; color:{c_theme['text_primary']};">
                         {persen:.1f}%
                     </div>
                 </div>
+                <div style="font-size:11px; color:{c_theme['text_secondary']}; margin-top:6px;">
+                    {"Kuota penuh" if persen >= 100 else f"Sisa {sisa:,} siswa".replace(",", ".")}
+                </div>
             </div>
             """)
-            for bidang, persen in per_bidang_persen
+            for bidang, persen, sisa in per_bidang_stat
         )
         st.markdown(
             _md(f'<div style="display:flex; flex-wrap:wrap; gap:12px; height:230px; overflow-y:auto;">{cards_html}</div>'),

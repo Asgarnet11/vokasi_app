@@ -305,9 +305,9 @@ def render_dashboard(df: pd.DataFrame, c_theme: dict):
             """)
             for bidang, persen, sisa in per_bidang_stat
         )
-       # CSS grid dengan jumlah kolom TETAP (bukan flex-wrap) supaya posisi
+        # CSS grid dengan jumlah kolom TETAP (bukan flex-wrap) supaya posisi
         # tiap card stabil dan tidak "reflow"/geser saat lebar layar sedikit
-        # berubah. Tanpa batas tinggi/overflo, jadi kartu apa pun jumlahnya
+        # berubah. Tanpa batas tinggi/overflow, jadi kartu apa pun jumlahnya
         # tidak akan terpotong — tinggi menyesuaikan otomatis.
         st.markdown(
             _md(f'<div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px;">{cards_html}</div>'),

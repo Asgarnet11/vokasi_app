@@ -355,7 +355,7 @@ def render_dashboard(df: pd.DataFrame, c_theme: dict):
 
     with col_month:
         st.markdown("#### Jadwal Program per Bulan")
-        st.caption("Bulan berjalan ditandai terpisah.")
+        st.caption("Bulan berjalan ditandai terpisah. Klik salah satu titik untuk lihat rincian program.")
 
         today = date.today()
         month_counts = pd.Series(0, index=range(1, 13))
@@ -385,7 +385,11 @@ def render_dashboard(df: pd.DataFrame, c_theme: dict):
                 textposition="middle right",
                 textfont=dict(color=c_theme["text_primary"], size=11),
                 marker=dict(color=marker_colors, size=marker_sizes, line=dict(width=2, color=c_theme["bg_surface"])),
-                hovertemplate="<b>%{y}</b><br>%{x} program pelatihan<extra></extra>",
+                # customdata = nomor bulan (1-12), dipakai untuk memetakan
+                # titik yang diklik kembali ke bulan yang tepat, terlepas
+                # dari label teksnya.
+                customdata=chart_df["bulan_ke"],
+                hovertemplate="<b>%{y}</b><br>%{x} program pelatihan<br><i>Klik untuk lihat rincian</i><extra></extra>",
                 showlegend=False,
             )
         )
@@ -401,7 +405,42 @@ def render_dashboard(df: pd.DataFrame, c_theme: dict):
             xaxis=dict(showgrid=True, gridcolor=c_theme["grid"], tickfont=dict(color=c_theme["text_primary"]), zeroline=False),
             transition=dict(duration=400, easing="cubic-in-out"),
         )
-        st.plotly_chart(fig_bln, width='stretch', config={"displayModeBar": False})
+
+        # on_select="rerun" mengaktifkan penangkapan klik pada titik grafik
+        # (butuh Streamlit >= 1.37). Hasil klik dikembalikan lewat return
+        # value ini, tidak perlu event listener JS terpisah.
+        month_event = st.plotly_chart(
+            fig_bln,
+            width='stretch',
+            config={"displayModeBar": False},
+            on_select="rerun",
+            selection_mode="points",
+            key="jadwal_bulanan_chart",
+        )
+
+        # ------------------------------------------------------------
+        # Rincian program pada bulan yang diklik pengguna
+        # ------------------------------------------------------------
+        selected_points = (month_event or {}).get("selection", {}).get("points", [])
+        if selected_points:
+            bulan_ke_terpilih = int(selected_points[0]["customdata"][0])
+            nama_bulan = INDO_MONTHS[bulan_ke_terpilih - 1]
+            df_bulan = df[df["_TGL_EFEKTIF"].apply(lambda d: d is not None and d.month == bulan_ke_terpilih)]
+
+            with st.container(border=True):
+                st.markdown(f"**Program Berjalan — Bulan {nama_bulan}** ({len(df_bulan)} program)")
+                if df_bulan.empty:
+                    st.caption("Tidak ada program yang tercatat mulai pada bulan ini.")
+                else:
+                    for bidang in sorted(df_bulan["BIDANG"].dropna().unique()):
+                        df_b = df_bulan[df_bulan["BIDANG"] == bidang]
+                        st.markdown(f"<span style='color:{c_theme['accent']}; font-weight:700;'>{bidang}</span>", unsafe_allow_html=True)
+                        for _, prog in df_b.iterrows():
+                            status = "✅" if prog["CHECK"] else "⏳"
+                            lok = prog["LOKASI"] if prog["LOKASI"] else "BPVP Kendari"
+                            st.markdown(f"{status} {prog['PROGRAM PELATIHAN']} — *{lok}*")
+        else:
+            st.caption("💡 Klik salah satu titik pada grafik untuk melihat daftar program di bulan tersebut.")
 
     st.write("")
 

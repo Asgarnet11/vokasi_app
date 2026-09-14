@@ -284,7 +284,7 @@ def render_dashboard(df: pd.DataFrame, c_theme: dict):
         cards_html = "".join(
             _md(f"""
             <div style="background:{c_theme['bg_surface']}; border:1px solid {c_theme['border']};
-                        border-radius:12px; padding:14px 16px; flex:1 1 160px; min-width:150px;
+                        border-radius:12px; padding:14px 16px;
                         box-shadow:0 1px 2px rgba(0,0,0,0.06); opacity:{0.6 if persen >= 100 else 1};">
                 <div style="font-size:12.5px; font-weight:700; color:{c_theme['text_primary']};
                             margin-bottom:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
@@ -304,8 +304,12 @@ def render_dashboard(df: pd.DataFrame, c_theme: dict):
             """)
             for bidang, persen, sisa in per_bidang_stat
         )
+        # CSS grid dengan jumlah kolom TETAP (bukan flex-wrap) supaya posisi
+        # tiap card stabil dan tidak "reflow"/geser saat lebar layar sedikit
+        # berubah. Tanpa batas tinggi/overflow, jadi kartu apa pun jumlahnya
+        # tidak akan terpotong — tinggi menyesuaikan otomatis.
         st.markdown(
-            _md(f'<div style="display:flex; flex-wrap:wrap; gap:12px; height:230px; overflow-y:auto;">{cards_html}</div>'),
+            _md(f'<div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px;">{cards_html}</div>'),
             unsafe_allow_html=True,
         )
 

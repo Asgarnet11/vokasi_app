@@ -116,7 +116,7 @@ def render_stat_card(label: str, value: str, c_theme: dict, sublabel: str = "", 
         )
 
 
-def render_kuota_card(title, total_paket, total_target_kuota, total_siswa_terisi, total_selesai, c_theme, sub_programs=None, kapasitas=16):
+def render_kuota_card(title, total_paket, total_target_kuota, total_siswa_terisi, total_selesai, c_theme, sub_programs=None, kapasitas=16, df_bidang=None):
     """Ringkasan kuota per kejuruan — memakai style grid mini-card yang sama
     dengan ringkasan keseluruhan di atas, supaya konsisten secara visual."""
     persen_kuota = (total_siswa_terisi / total_target_kuota * 100) if total_target_kuota > 0 else 0.0
@@ -151,6 +151,34 @@ def render_kuota_card(title, total_paket, total_target_kuota, total_siswa_terisi
             render_stat_card("Sisa Kuota", f"{sisa_kuota:,}".replace(",", "."), c_theme, "Siswa Belum Terisi")
         with m3:
             render_stat_card("Total Selesai", f"{total_selesai:,}".replace(",", "."), c_theme, "Paket (Check)")
+            # Card "Total Selesai" bisa diklik untuk lihat daftar programnya —
+            # tombol ditaruh langsung di bawah card ini supaya jelas
+            # keterkaitannya, bukan HTML statis biasa.
+            if df_bidang is not None and total_selesai > 0:
+                toggle_key = f"show_selesai_{title}"
+                if toggle_key not in st.session_state:
+                    st.session_state[toggle_key] = False
+                if st.button(
+                    f"📋 Lihat {total_selesai} yang Sudah Selesai",
+                    key=f"btn_{toggle_key}",
+                    width="stretch",
+                ):
+                    st.session_state[toggle_key] = not st.session_state[toggle_key]
+
+    # Daftar program yang sudah selesai (CHECK=True) untuk kejuruan ini,
+    # ditampilkan saat tombol "Lihat ... yang Sudah Selesai" diklik.
+    toggle_key = f"show_selesai_{title}"
+    if df_bidang is not None and st.session_state.get(toggle_key, False):
+        with st.container(border=True):
+            df_selesai = df_bidang[df_bidang["CHECK"]]
+            st.markdown(f"**Program Selesai — {title}** ({len(df_selesai)} paket)")
+            if df_selesai.empty:
+                st.caption("Belum ada program yang selesai untuk kejuruan ini.")
+            else:
+                for _, prog in df_selesai.iterrows():
+                    lok = prog["LOKASI"] if prog["LOKASI"] else "BPVP Kendari"
+                    tgl_selesai = prog.get("TANGGAL SELESAI") or prog.get("RENCANA SELESAI") or "-"
+                    st.markdown(f"✅ **{prog['PROGRAM PELATIHAN']}** — *{lok}* · Selesai: {tgl_selesai}")
 
     if sub_programs is not None and sub_programs.empty:
         st.caption("Belum ada program pelatihan tercatat untuk kategori ini.")
@@ -423,7 +451,8 @@ def render_dashboard(df: pd.DataFrame, c_theme: dict):
         # ------------------------------------------------------------
         selected_points = (month_event or {}).get("selection", {}).get("points", [])
         if selected_points:
-            bulan_ke_terpilih = int(selected_points[0]["customdata"][0])
+            raw_customdata = selected_points[0]["customdata"]
+            bulan_ke_terpilih = int(raw_customdata[0] if isinstance(raw_customdata, (list, tuple)) else raw_customdata)
             nama_bulan = INDO_MONTHS[bulan_ke_terpilih - 1]
             df_bulan = df[df["_TGL_EFEKTIF"].apply(lambda d: d is not None and d.month == bulan_ke_terpilih)]
 
@@ -479,5 +508,6 @@ def render_dashboard(df: pd.DataFrame, c_theme: dict):
             c_theme=c_theme,
             sub_programs=sub_progs,
             kapasitas=KAPASITAS_DEFAULT,
+            df_bidang=df_bidang,
         )
         st.write("")

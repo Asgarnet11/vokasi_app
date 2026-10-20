@@ -59,7 +59,7 @@ pip install -r requirements.txt
 Pastikan `requirements.txt` berisi dependensi berikut:
 
 ```
-streamlit>=1.35.0
+streamlit>=1.40.0
 pandas>=2.0.0
 plotly>=5.18.0
 gspread>=6.0.0

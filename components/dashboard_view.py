@@ -17,16 +17,17 @@ def _md(html_str: str) -> str:
     return "\n".join(line.strip() for line in html_str.strip().splitlines())
 
 def render_notification_h10(df: pd.DataFrame, c_theme: dict):
-    """Mendeteksi program yang berada di rentang H-x sebelum selesai dan belum selesai (CHECK=False)."""
+    """Mendeteksi program yang sudah lewat deadline (overdue) maupun yang berada
+    di rentang H-x sebelum selesai dan belum selesai (CHECK=False)."""
     today = date.today()
     h_days = get_config("h10_warning_days")
 
     # Filter program yang memiliki tanggal selesai dan belum selesai
-    mask_h10 = (
+    mask_active = (
         df["_TGL_SELESAI_EFEKTIF"].notna()
         & (~df["CHECK"])
     )
-    df_active = df[mask_h10].copy()
+    df_active = df[mask_active].copy()
     
     if df_active.empty:
         return
@@ -34,31 +35,36 @@ def render_notification_h10(df: pd.DataFrame, c_theme: dict):
     # Hitung sisa hari menuju tanggal selesai
     df_active["sisa_hari"] = df_active["_TGL_SELESAI_EFEKTIF"].apply(lambda d: (d - today).days)
 
-    # Ambil program yang berada di rentang 0 s.d. H-x hari sebelum selesai
-    warning_programs = df_active[(df_active["sisa_hari"] >= 0) & (df_active["sisa_hari"] <= h_days)]
-    
-    if not warning_programs.empty:
-        with st.container(border=True):
+    # 1. Program yang lewat tanggal selesai tapi belum dicentang selesai (Overdue)
+    overdue_programs = df_active[df_active["sisa_hari"] < 0].sort_values(by="sisa_hari", ascending=True)
+
+    # 2. Program yang berada di rentang 0 s.d. H-x hari sebelum selesai
+    warning_programs = df_active[(df_active["sisa_hari"] >= 0) & (df_active["sisa_hari"] <= h_days)].sort_values(by="sisa_hari", ascending=True)
+
+    if overdue_programs.empty and warning_programs.empty:
+        return
+
+    with st.container(border=True):
+        # Tampilkan Program Terlewat Deadline (Overdue) jika ada
+        if not overdue_programs.empty:
             st.markdown(
                 _md(f"""
                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
-                    <span style="font-size: 22px;">⚠️</span>
+                    <span style="font-size: 22px;">🚨</span>
                     <div>
-                        <strong style="color: {c_theme['warning']}; font-size: 15px;">Peringatan Pengisian Survei Pelatihan (H-{h_days} Menuju Selesai)</strong>
+                        <strong style="color: {c_theme['warning']}; font-size: 15px;">Peringatan Pelatihan Terlewat Deadline ({len(overdue_programs)} Program)</strong>
                         <div style="font-size: 12.5px; color: {c_theme['text_secondary']};">
-                            Ada <strong>{len(warning_programs)} program pelatihan</strong> yang mendekati masa akhir pelatihan (≤ {h_days} hari lagi). Harap arahkan siswa untuk segera mengisi kuesioner / survei evaluasi.
+                            Program di bawah ini sudah melewati tanggal rencana/aktual selesai namun <strong>belum ditandai selesai (CHECK)</strong>.
                         </div>
                     </div>
                 </div>
                 """),
                 unsafe_allow_html=True
             )
-            
-            # Tampilkan rincian kelas yang terkena warning
-            for _, r in warning_programs.iterrows():
-                hari_teks = "Hari ini selesai!" if r["sisa_hari"] == 0 else f"Sisa {r['sisa_hari']} hari lagi"
+            for _, r in overdue_programs.iterrows():
+                hari_lewat = abs(r["sisa_hari"])
+                hari_teks = f"Lewat {hari_lewat} hari!"
                 tgl_str = r["_TGL_SELESAI_EFEKTIF"].strftime("%d %b %Y")
-                
                 c_info, c_badge = st.columns([4, 1])
                 with c_info:
                     st.markdown(f"• **{r['PROGRAM PELATIHAN']}** ({r['BIDANG']} · {r['LOKASI'] if r['LOKASI'] else 'BPVP Kendari'})")
@@ -68,7 +74,38 @@ def render_notification_h10(df: pd.DataFrame, c_theme: dict):
                         f"<div style='text-align:right; padding-top:4px;'><span style='background:{c_theme['warning']}; color:#FFFFFF; font-weight:700; font-size:11px; padding:3px 8px; border-radius:6px;'>{hari_teks}</span></div>",
                         unsafe_allow_html=True
                     )
-            st.divider()
+            if not warning_programs.empty:
+                st.divider()
+
+        # Tampilkan Peringatan Pengisian Survei H-10 jika ada
+        if not warning_programs.empty:
+            st.markdown(
+                _md(f"""
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                    <span style="font-size: 22px;">⚠️</span>
+                    <div>
+                        <strong style="color: {c_theme['accent']}; font-size: 15px;">Peringatan Pengisian Survei Pelatihan (H-{h_days} Menuju Selesai)</strong>
+                        <div style="font-size: 12.5px; color: {c_theme['text_secondary']};">
+                            Ada <strong>{len(warning_programs)} program pelatihan</strong> yang mendekati masa akhir pelatihan (≤ {h_days} hari lagi). Harap arahkan siswa untuk segera mengisi kuesioner / survei evaluasi.
+                        </div>
+                    </div>
+                </div>
+                """),
+                unsafe_allow_html=True
+            )
+            for _, r in warning_programs.iterrows():
+                hari_teks = "Hari ini selesai!" if r["sisa_hari"] == 0 else f"Sisa {r['sisa_hari']} hari lagi"
+                tgl_str = r["_TGL_SELESAI_EFEKTIF"].strftime("%d %b %Y")
+                c_info, c_badge = st.columns([4, 1])
+                with c_info:
+                    st.markdown(f"• **{r['PROGRAM PELATIHAN']}** ({r['BIDANG']} · {r['LOKASI'] if r['LOKASI'] else 'BPVP Kendari'})")
+                    st.caption(f"Target Selesai: {tgl_str}")
+                with c_badge:
+                    st.markdown(
+                        f"<div style='text-align:right; padding-top:4px;'><span style='background:{c_theme['accent']}; color:#FFFFFF; font-weight:700; font-size:11px; padding:3px 8px; border-radius:6px;'>{hari_teks}</span></div>",
+                        unsafe_allow_html=True
+                    )
+        st.divider()
 
 def render_donut_svg(percent: float, c_theme: dict, size: int = 56, stroke: int = 8, muted: bool = False) -> str:
     """SVG donut/gauge ring sederhana untuk menampilkan persentase capaian

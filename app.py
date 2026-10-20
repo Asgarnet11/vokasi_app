@@ -1,3 +1,4 @@
+# pyrefly: ignore[missing-import]
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date
@@ -199,16 +200,17 @@ elif active_page == "edit":
             st.session_state["edit_no"] = None
 
     st.subheader("Edit Data Pelatihan" if editing_row is not None else "Tambah Program Pelatihan Baru")
+    tag = str(edit_no) if edit_no is not None else "new"
 
     with st.form("form_edit"):
         c1, c2, c3, c4 = st.columns([1.5, 2, 1.5, 1])
         b_list = sorted([str(x).strip() for x in df_all["BIDANG"].dropna().unique() if str(x).strip()])
 
         with c1:
-            allow_new_bidang = st.checkbox("Bidang baru?", value=False, help="Centang jika bidang belum ada di daftar")
+            allow_new_bidang = st.checkbox("Bidang baru?", value=False, key=f"chk_new_bidang_{tag}", help="Centang jika bidang belum ada di daftar")
             if allow_new_bidang or not b_list:
                 form_bidang = st.text_input(
-                    "Bidang*", value=editing_row["BIDANG"] if editing_row is not None else ""
+                    "Bidang*", value=editing_row["BIDANG"] if editing_row is not None else "", key=f"in_bidang_text_{tag}"
                 )
             else:
                 default_idx = (
@@ -216,14 +218,14 @@ elif active_page == "edit":
                     if editing_row is not None and editing_row["BIDANG"] in b_list
                     else 0
                 )
-                form_bidang = st.selectbox("Bidang*", b_list, index=default_idx)
+                form_bidang = st.selectbox("Bidang*", b_list, index=default_idx, key=f"in_bidang_sel_{tag}")
         with c2:
             form_prog = st.text_input(
-                "Program Pelatihan*", value=editing_row["PROGRAM PELATIHAN"] if editing_row is not None else ""
+                "Program Pelatihan*", value=editing_row["PROGRAM PELATIHAN"] if editing_row is not None else "", key=f"in_prog_{tag}"
             )
         with c3:
             form_lok = st.text_input(
-                "Lokasi", value=editing_row["LOKASI"] if editing_row is not None else "BPVP Kendari"
+                "Lokasi", value=editing_row["LOKASI"] if editing_row is not None else "BPVP Kendari", key=f"in_lok_{tag}"
             )
         with c4:
             form_pst = st.number_input(
@@ -231,6 +233,7 @@ elif active_page == "edit":
                 min_value=0,
                 step=1,
                 value=int(editing_row["PESERTA"]) if editing_row is not None else 0,
+                key=f"in_pst_{tag}",
             )
 
         kapasitas = get_config("kapasitas_default")
@@ -238,7 +241,7 @@ elif active_page == "edit":
             st.caption(f":material/warning: Peserta melebihi kapasitas standar ({kapasitas} orang/paket).")
 
         form_check = st.checkbox(
-            "Sudah Selesai (CHECK)", value=bool(editing_row["CHECK"]) if editing_row is not None else False
+            "Sudah Selesai (CHECK)", value=bool(editing_row["CHECK"]) if editing_row is not None else False, key=f"in_check_{tag}"
         )
 
         st.caption("Isi minimal salah satu pasangan tanggal (Aktual atau Rencana) agar program muncul di grafik jadwal & peringatan H-10. Format: Tanggal/Bulan/Tahun.")
@@ -247,23 +250,27 @@ elif active_page == "edit":
             "Tgl Mulai (Aktual)",
             value=parse_date(editing_row.get("TANGGAL MULAI")) if editing_row is not None else None,
             format="DD/MM/YYYY",
+            key=f"in_tm_{tag}",
         )
         t_selesai = d2.date_input(
             "Tgl Selesai (Aktual)",
             value=parse_date(editing_row.get("TANGGAL SELESAI")) if editing_row is not None else None,
             format="DD/MM/YYYY",
+            key=f"in_ts_{tag}",
         )
         r_mulai = d3.date_input(
             "Rencana Mulai",
             value=parse_date(editing_row.get("RENCANA MULAI")) if editing_row is not None else None,
             format="DD/MM/YYYY",
+            key=f"in_rm_{tag}",
         )
         r_selesai = d4.date_input(
             "Rencana Selesai",
             value=parse_date(editing_row.get("RENCANA SELESAI")) if editing_row is not None else None,
             format="DD/MM/YYYY",
+            key=f"in_rs_{tag}",
         )
-        ket = st.text_area("Keterangan", value=editing_row["KETERANGAN"] if editing_row is not None else "", height=80)
+        ket = st.text_area("Keterangan", value=editing_row["KETERANGAN"] if editing_row is not None else "", height=80, key=f"in_ket_{tag}")
 
         b_cancel, b_save, _ = st.columns([1, 1, 4])
         cancel_clicked = b_cancel.form_submit_button("Batal", width="stretch")

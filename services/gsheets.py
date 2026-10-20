@@ -43,13 +43,18 @@ def get_worksheet():
             return sh.worksheet(worksheet_name)
         except gspread.exceptions.WorksheetNotFound:
             available = [w.title for w in sh.worksheets()]
-            st.error(f"Worksheet '{worksheet_name}' tidak ditemukan.")
+            # Fallback cerdas jika nama sheet adalah "Data" atau "Reg"
+            for alt_name in ["Reg", "Data"]:
+                if alt_name in available:
+                    return sh.worksheet(alt_name)
+            st.error(f"Worksheet '{worksheet_name}' tidak ditemukan di Google Sheets.")
             st.write("Worksheet yang tersedia:", available)
             st.stop()
 
     except Exception as e:
-        st.error("Gagal terhubung ke Google Sheets.")
-        st.exception(e)
+        st.error(f"Gagal terhubung ke Google Sheets ({type(e).__name__}). Silakan periksa kredensial di secrets.toml.")
+        import traceback
+        traceback.print_exc()
         st.stop()
 
 
@@ -241,24 +246,9 @@ def delete_row(no_value: int) -> bool:
 
 
 def save_data(df_to_save: pd.DataFrame) -> bool:
-    """Menyimpan seluruh DataFrame kembali ke worksheet (bulk overwrite).
-
-    Dipertahankan untuk operasi massal (mis. import ulang data), TAPI kini
-    dengan backup + rollback: kalau penulisan gagal di tengah jalan, data lama
-    dikembalikan alih-alih dibiarkan kosong. Untuk operasi tambah/edit/hapus
-    satu baris sehari-hari, gunakan add_row / update_row / delete_row di atas
-    karena jauh lebih cepat dan lebih aman.
-    """
+    """Menyimpan seluruh DataFrame kembali ke worksheet secara aman tanpa
+    membersihkan seluruh sheet terlebih dahulu (menghindari data loss & preserving formatting)."""
     ws = get_worksheet()
-
-    # 1. Backup data lama dulu, sebelum melakukan perubahan apa pun
-    try:
-        backup_values = ws.get_all_values()
-    except Exception as e:
-        st.error("Gagal membuat backup sebelum menyimpan. Penyimpanan dibatalkan demi keamanan data.")
-        st.exception(e)
-        return False
-
     try:
         df_out = df_to_save.copy()
         for col in COLUMNS:
@@ -268,20 +258,23 @@ def save_data(df_to_save: pd.DataFrame) -> bool:
 
         rows = [COLUMNS] + [_row_dict_to_values(r) for r in df_out.to_dict("records")]
 
-        ws.clear()
-        ws.update(rows, "A1")
+        old_values = ws.get_all_values()
+        old_row_count = len(old_values)
+
+        # Update data mulai dari sel A1 dengan parsing otomatis
+        ws.update(rows, "A1", value_input_option="USER_ENTERED")
+
+        # Jika baris baru lebih sedikit dari baris lama, bersihkan hanya baris sisanya
+        new_row_count = len(rows)
+        if old_row_count > new_row_count:
+            last_col_letter = gspread.utils.rowcol_to_a1(1, len(COLUMNS)).rstrip("0123456789")
+            ws.batch_clear([f"A{new_row_count + 1}:{last_col_letter}{old_row_count}"])
+
         st.cache_data.clear()
         return True
 
     except Exception as e:
-        st.error("Gagal menyimpan data ke Google Sheets. Mencoba mengembalikan data sebelumnya...")
-        st.exception(e)
-        try:
-            ws.clear()
-            if backup_values:
-                ws.update(backup_values, "A1")
-            st.warning("Data berhasil dikembalikan ke kondisi sebelum penyimpanan gagal.")
-        except Exception as rollback_error:
-            st.error("GAGAL mengembalikan data lama. Segera hubungi admin/periksa Google Sheets secara manual.")
-            st.exception(rollback_error)
+        st.error("Gagal menyimpan data ke Google Sheets.")
+        import traceback
+        traceback.print_exc()
         return False

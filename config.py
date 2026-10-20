@@ -7,6 +7,7 @@ _defaults = {
     "worksheet_name": "Reg",
     "cache_ttl_seconds": 30,
     "h10_warning_days": 10,
+    "admin_pin": "bpvp2026",
 }
 
 

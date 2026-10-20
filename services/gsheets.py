@@ -241,8 +241,32 @@ def delete_row(no_value: int) -> bool:
         return True
     except Exception as e:
         st.error("Gagal menghapus data di Google Sheets.")
-        st.exception(e)
+        import traceback
+        traceback.print_exc()
         return False
+
+
+def toggle_check_row(no_value: int) -> bool:
+    """Toggle status CHECK (selesai / belum selesai) pada baris dengan NO tertentu
+    secara langsung dan cepat di Google Sheets tanpa menimpa baris lain."""
+    ws = get_worksheet()
+    try:
+        row_idx = _find_row_index_by_no(no_value)
+        if row_idx is None:
+            st.error(f"Baris dengan NO {no_value} tidak ditemukan.")
+            return False
+        col_check_idx = COLUMNS.index("CHECK") + 1
+        current_val = str(ws.cell(row_idx, col_check_idx).value or "").strip().upper()
+        new_val = "FALSE" if current_val in ["TRUE", "1", "YES", "YA", "SELESAI"] else "TRUE"
+        ws.update_cell(row_idx, col_check_idx, new_val)
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Gagal mengubah status selesai untuk NO {no_value}.")
+        import traceback
+        traceback.print_exc()
+        return False
+
 
 
 def save_data(df_to_save: pd.DataFrame) -> bool:

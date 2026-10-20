@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 import plotly.graph_objects as go
+import plotly.express as px
 
 from config import get_config
 
@@ -254,6 +255,63 @@ def render_kuota_card(title, total_paket, total_target_kuota, total_siswa_terisi
 
                 st.progress(min(max(p_pct / 100.0, 0.0), 1.0))
                 st.write("")
+
+
+def render_training_timeline(df: pd.DataFrame, c_theme: dict):
+    """Menampilkan visualisasi timeline (Gantt Chart) jadwal pelaksanaan
+    seluruh program pelatihan berdasarkan tanggal mulai dan selesai efektif."""
+    mask_timeline = df["_TGL_EFEKTIF"].notna()
+    df_t = df[mask_timeline].copy()
+
+    if df_t.empty:
+        st.info("Belum ada data tanggal pelaksanaan yang valid untuk ditampilkan di timeline.")
+        return
+
+    # Fallback jika tanggal selesai belum terisi: asumsikan durasi 30 hari
+    df_t["_END"] = df_t.apply(
+        lambda r: r["_TGL_SELESAI_EFEKTIF"] if pd.notna(r["_TGL_SELESAI_EFEKTIF"]) else (r["_TGL_EFEKTIF"] + pd.Timedelta(days=30)),
+        axis=1
+    )
+    df_t["STATUS_LABEL"] = df_t["CHECK"].apply(lambda c: "Selesai" if c else "Sedang Berjalan")
+    df_t = df_t.sort_values(by="_TGL_EFEKTIF", ascending=True)
+
+    st.caption("Visualisasi rentang waktu pelaksanaan tiap kelas pelatihan. Arahkan kursor untuk melihat rincian.")
+
+    fig_timeline = px.timeline(
+        df_t,
+        x_start="_TGL_EFEKTIF",
+        x_end="_END",
+        y="PROGRAM PELATIHAN",
+        color="BIDANG",
+        hover_name="PROGRAM PELATIHAN",
+        hover_data={
+            "BIDANG": True,
+            "LOKASI": True,
+            "PESERTA": True,
+            "STATUS_LABEL": True,
+            "_TGL_EFEKTIF": False,
+            "_END": False,
+        },
+    )
+
+    fig_timeline.update_yaxes(autorange="reversed", title="")
+    fig_timeline.update_xaxes(
+        title="Rentang Tanggal Pelaksanaan",
+        showgrid=True,
+        gridcolor=c_theme["grid"],
+        tickfont=dict(color=c_theme["text_primary"]),
+    )
+    fig_timeline.update_layout(
+        margin=dict(l=10, r=15, t=10, b=10),
+        height=max(360, 28 * len(df_t) + 70),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter, sans-serif", color=c_theme["text_secondary"], size=12),
+        hoverlabel=dict(bgcolor=c_theme["bg_surface"], font_color=c_theme["text_primary"], bordercolor=c_theme["border"]),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(color=c_theme["text_secondary"])),
+    )
+    st.plotly_chart(fig_timeline, width='stretch', config={"displayModeBar": False})
+
 
 def render_dashboard(df: pd.DataFrame, c_theme: dict):
     if df.empty:
@@ -538,40 +596,46 @@ def render_dashboard(df: pd.DataFrame, c_theme: dict):
     st.write("")
 
     # ================================================================
-    # 3. RINCIAN PER KEJURUAN (dipertahankan — tidak ada padanan di
-    #    wireframe, tapi fungsinya penting & tidak diminta dihapus)
+    # 3. TAMPILAN TINGKAT LANJUT: RINCIAN KEJURUAN & TIMELINE JADWAL
     # ================================================================
-    st.markdown("#### Target & Capaian Kuota per Kejuruan")
-    st.caption("Monitoring kuota siswa terpisah untuk masing-masing bidang pelatihan vokasi.")
+    tab_rincian, tab_timeline = st.tabs([
+        "📊 Target & Capaian Kuota per Kejuruan",
+        "📅 Timeline Jadwal Pelatihan (Gantt Chart)",
+    ])
 
-    bidang_list = sorted([b for b in df["BIDANG"].dropna().unique() if str(b).strip()])
+    with tab_rincian:
+        st.caption("Monitoring kuota siswa terpisah untuk masing-masing bidang pelatihan vokasi.")
+        bidang_list = sorted([b for b in df["BIDANG"].dropna().unique() if str(b).strip()])
 
-    for bidang in bidang_list:
-        df_bidang = df[df["BIDANG"] == bidang]
-        b_paket = len(df_bidang)
-        b_target = b_paket * KAPASITAS_DEFAULT
-        b_terisi = int(df_bidang["PESERTA"].sum())
-        b_selesai = int(df_bidang["CHECK"].sum())
+        for bidang in bidang_list:
+            df_bidang = df[df["BIDANG"] == bidang]
+            b_paket = len(df_bidang)
+            b_target = b_paket * KAPASITAS_DEFAULT
+            b_terisi = int(df_bidang["PESERTA"].sum())
+            b_selesai = int(df_bidang["CHECK"].sum())
 
-        sub_progs = (
-            df_bidang.groupby(["PROGRAM PELATIHAN", "LOKASI"])
-            .agg(
-                paket_sub=("NO", "count"),
-                peserta_sub=("PESERTA", "sum"),
-                selesai_sub=("CHECK", "sum")
+            sub_progs = (
+                df_bidang.groupby(["PROGRAM PELATIHAN", "LOKASI"])
+                .agg(
+                    paket_sub=("NO", "count"),
+                    peserta_sub=("PESERTA", "sum"),
+                    selesai_sub=("CHECK", "sum")
+                )
+                .reset_index()
             )
-            .reset_index()
-        )
 
-        render_kuota_card(
-            title=f"Kejuruan: {bidang}",
-            total_paket=b_paket,
-            total_target_kuota=b_target,
-            total_siswa_terisi=b_terisi,
-            total_selesai=b_selesai,
-            c_theme=c_theme,
-            sub_programs=sub_progs,
-            kapasitas=KAPASITAS_DEFAULT,
-            df_bidang=df_bidang,
-        )
-        st.write("")
+            render_kuota_card(
+                title=f"Kejuruan: {bidang}",
+                total_paket=b_paket,
+                total_target_kuota=b_target,
+                total_siswa_terisi=b_terisi,
+                total_selesai=b_selesai,
+                c_theme=c_theme,
+                sub_programs=sub_progs,
+                kapasitas=KAPASITAS_DEFAULT,
+                df_bidang=df_bidang,
+            )
+            st.write("")
+
+    with tab_timeline:
+        render_training_timeline(df, c_theme)

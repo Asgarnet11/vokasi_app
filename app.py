@@ -3,11 +3,12 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, date
 
-from services.gsheets import load_data, load_data_fresh, add_row, update_row, delete_row, COLUMNS
+from services.gsheets import load_data, load_data_fresh, add_row, update_row, delete_row, toggle_check_row, COLUMNS
 from components.theme import apply_theme
 from components.dashboard_view import render_dashboard
 from components.data_table import render_data_table_html
 from utils.dates import parse_date, format_date
+from utils.exporter import export_monitoring_excel
 from config import get_config
 
 # ============================================================
@@ -28,6 +29,8 @@ if "edit_no" not in st.session_state:
     st.session_state["edit_no"] = None
 if "confirm_delete_no" not in st.session_state:
     st.session_state["confirm_delete_no"] = None
+if "is_admin" not in st.session_state:
+    st.session_state["is_admin"] = False
 
 c_theme = apply_theme(st.session_state["app_theme"])
 
@@ -92,6 +95,13 @@ with st.sidebar:
     st.markdown("#### Filter Data")
     df_raw = load_data()
 
+    # Filter Tahun Anggaran berdasarkan tanggal mulai efektif
+    years_available = sorted(list(set([d.year for d in df_raw["_TGL_EFEKTIF"].dropna() if hasattr(d, "year")])))
+    if years_available:
+        f_tahun = st.selectbox("Tahun Anggaran", ["Semua"] + [str(y) for y in years_available])
+    else:
+        f_tahun = "Semua"
+
     bidang_options = ["Semua"] + sorted([b for b in df_raw["BIDANG"].dropna().unique() if str(b).strip()])
     f_bidang = st.selectbox("Bidang", bidang_options)
 
@@ -114,10 +124,34 @@ with st.sidebar:
         st.cache_data.clear()
         st.rerun()
 
+    st.divider()
+    st.markdown("#### Hak Akses")
+    if not st.session_state.get("is_admin", False):
+        with st.expander("Masuk sebagai Admin", expanded=False):
+            st.caption("Masuk untuk menambah, mengedit, atau menghapus data pelatihan.")
+            pin_input = st.text_input("PIN Admin", type="password", key="admin_pin_sidebar", help="PIN default: bpvp2026")
+            if st.button("Masuk Admin", width="stretch", icon=":material/login:"):
+                expected_pin = str(get_config("admin_pin"))
+                if str(pin_input).strip() == expected_pin:
+                    st.session_state["is_admin"] = True
+                    st.toast("Mode Admin berhasil diaktifkan!", icon=":material/lock_open:")
+                    st.rerun()
+                else:
+                    st.error("PIN Admin salah.")
+    else:
+        st.success("✅ **Mode Admin Aktif**")
+        st.caption("Anda memiliki akses penuh untuk menambah, mengedit, dan menghapus data.")
+        if st.button("Keluar Admin", width="stretch", icon=":material/logout:"):
+            st.session_state["is_admin"] = False
+            st.toast("Mode Admin dinonaktifkan.", icon=":material/lock:")
+            st.rerun()
+
 # ============================================================
 # Penerapan Filter
 # ============================================================
 df = df_raw.copy()
+if f_tahun != "Semua":
+    df = df[df["_TGL_EFEKTIF"].apply(lambda d: d is not None and hasattr(d, "year") and str(d.year) == f_tahun)]
 if f_bidang != "Semua":
     df = df[df["BIDANG"] == f_bidang]
 if f_program != "Semua":
@@ -152,7 +186,20 @@ if active_page == "dashboard":
 # HALAMAN: LIHAT DATA
 # ============================================================
 elif active_page == "lihat":
-    st.caption(f"Menampilkan {len(df)} dari {len(df_raw)} baris data.")
+    c_caption, c_excel = st.columns([3, 1.2])
+    with c_caption:
+        st.caption(f"Menampilkan {len(df)} dari {len(df_raw)} baris data.")
+    with c_excel:
+        if not df.empty:
+            excel_bytes = export_monitoring_excel(df, kapasitas_default=get_config("kapasitas_default"))
+            st.download_button(
+                label="Unduh Rekap Excel (.xlsx)",
+                data=excel_bytes,
+                file_name=f"Rekap_Pelatihan_BPVP_Kendari_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                icon=":material/download:",
+                width="stretch",
+            )
 
     if df.empty:
         st.info("Tidak ada data yang cocok dengan filter yang dipilih. Coba ubah atau reset filter di sidebar.")
@@ -160,23 +207,41 @@ elif active_page == "lihat":
         st.markdown(render_data_table_html(df, c_theme), unsafe_allow_html=True)
 
         st.divider()
-        st.markdown("**Aksi Cepat Baris**")
+        st.markdown("**Aksi Cepat Baris Data**")
         valid_no = [str(int(float(v))) for v in df["NO"].dropna() if str(v).replace(".", "", 1).isdigit()]
-        sel_no = st.selectbox("Pilih NO baris untuk diedit / dihapus", ["-"] + valid_no)
-        ac1, ac2 = st.columns(2)
+        sel_no = st.selectbox("Pilih NO baris untuk aksi cepat / edit / hapus", ["-"] + valid_no)
 
-        with ac1:
-            if st.button(
-                "Edit baris ini", width="stretch", disabled=(sel_no == "-"), icon=":material/edit:"
-            ):
-                st.session_state["edit_no"] = int(sel_no)
-                go_to("edit")
-                st.rerun()
-        with ac2:
-            if st.button(
-                "Hapus baris ini", width="stretch", disabled=(sel_no == "-"), icon=":material/delete:"
-            ):
-                st.session_state["confirm_delete_no"] = int(sel_no)
+        is_admin = st.session_state.get("is_admin", False)
+
+        if sel_no != "-":
+            target_no = int(sel_no)
+            row_match = df_raw[df_raw["NO"] == target_no]
+            is_cur_done = bool(row_match.iloc[0]["CHECK"]) if not row_match.empty else False
+            nama = row_match.iloc[0]["PROGRAM PELATIHAN"] if not row_match.empty else "(tidak diketahui)"
+
+            toggle_text = "Tandai Belum Selesai" if is_cur_done else "Tandai Selesai (CHECK)"
+            toggle_icon = ":material/cancel:" if is_cur_done else ":material/check_circle:"
+
+            ac1, ac2, ac3 = st.columns([1.3, 1, 1])
+            with ac1:
+                if st.button(toggle_text, width="stretch", icon=toggle_icon, disabled=not is_admin):
+                    with st.spinner("Memperbarui status..."):
+                        if toggle_check_row(target_no):
+                            st.toast(f"Status NO {target_no} ({nama}) berhasil diubah!", icon=":material/check:")
+                            st.rerun()
+            with ac2:
+                if st.button("Edit baris ini", width="stretch", icon=":material/edit:", disabled=not is_admin):
+                    st.session_state["edit_no"] = target_no
+                    go_to("edit")
+                    st.rerun()
+            with ac3:
+                if st.button("Hapus baris ini", width="stretch", icon=":material/delete:", disabled=not is_admin):
+                    st.session_state["confirm_delete_no"] = target_no
+
+            if not is_admin:
+                st.caption("🔒 *Fitur ubah status, edit, dan hapus memerlukan otentikasi Admin di sidebar.*")
+        else:
+            st.caption("Pilih salah satu nomor baris pada pemilih di atas untuk mengubah status, mengedit, atau menghapus.")
 
         if st.session_state.get("confirm_delete_no") is not None:
             no_target = st.session_state["confirm_delete_no"]
@@ -188,19 +253,35 @@ elif active_page == "lihat":
 # HALAMAN: TAMBAH / EDIT DATA
 # ============================================================
 elif active_page == "edit":
-    df_all = load_data()
-    edit_no = st.session_state.get("edit_no")
-    editing_row = None
-    if edit_no is not None:
-        match = df_all[df_all["NO"] == edit_no]
-        if not match.empty:
-            editing_row = match.iloc[0]
-        else:
-            st.warning("Baris yang ingin diedit tidak ditemukan (mungkin sudah dihapus). Menampilkan form tambah baru.")
-            st.session_state["edit_no"] = None
+    is_admin = st.session_state.get("is_admin", False)
+    if not is_admin:
+        st.warning("Halaman ini memerlukan hak akses Admin untuk menambah atau mengubah data pelatihan.")
+        with st.container(border=True):
+            st.markdown("#### Masuk sebagai Admin")
+            st.caption("Masukkan PIN Admin untuk membuka form tambah atau edit data pelatihan.")
+            pin_form = st.text_input("PIN Admin", type="password", key="admin_pin_page_unlock", help="PIN default: bpvp2026")
+            if st.button("Buka Akses Admin", type="primary", width="stretch", icon=":material/lock_open:"):
+                expected_pin = str(get_config("admin_pin"))
+                if str(pin_form).strip() == expected_pin:
+                    st.session_state["is_admin"] = True
+                    st.toast("Mode Admin berhasil diaktifkan!", icon=":material/verified_user:")
+                    st.rerun()
+                else:
+                    st.error("PIN Admin salah. Silakan coba kembali.")
+    else:
+        df_all = load_data()
+        edit_no = st.session_state.get("edit_no")
+        editing_row = None
+        if edit_no is not None:
+            match = df_all[df_all["NO"] == edit_no]
+            if not match.empty:
+                editing_row = match.iloc[0]
+            else:
+                st.warning("Baris yang ingin diedit tidak ditemukan (mungkin sudah dihapus). Menampilkan form tambah baru.")
+                st.session_state["edit_no"] = None
 
-    st.subheader("Edit Data Pelatihan" if editing_row is not None else "Tambah Program Pelatihan Baru")
-    tag = str(edit_no) if edit_no is not None else "new"
+        st.subheader("Edit Data Pelatihan" if editing_row is not None else "Tambah Program Pelatihan Baru")
+        tag = str(edit_no) if edit_no is not None else "new"
 
     with st.form("form_edit"):
         c1, c2, c3, c4 = st.columns([1.5, 2, 1.5, 1])
